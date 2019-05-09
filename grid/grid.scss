@@ -9,19 +9,17 @@ body {
 .item {
     background-color: blue;
 }
-.item:nth-of-type(1){
-    grid-row-start:2;
-    grid-row-end:4;
-}
 
-.container1 {
+
+.container {
     display: grid;
     width: 400px;
     height: 400px;
-    // grid-template-columns: 100px 100px 100px 100px;
-    grid-template-columns: 1fr 2fr 3fr 4fr;
-    // grid-template-columns:repeat(2, 100px 20px 60px);
-    grid-template-rows: 100px 100px 100px 100px;
+    grid-template-columns: 1fr 2fr;
+    grid-template-rows: 200px 200px;
     grid-row-gap: 20px;
     grid-column-gap: 20px;
+    grid-template-areas:'a b'
+                        'c d';
+    justify-items:center;
 }

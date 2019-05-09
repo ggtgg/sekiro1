@@ -186,7 +186,7 @@ demo
   grid-column-start: 2;
 }
 ```
-**项目属性**
+# 项目属性
 * grid-column-start属性：左边框所在* 的垂直网格线
 * grid-column-end属性：右边框所在的垂直网格线
 * grid-row-start属性：上边框所在的水平网格线
