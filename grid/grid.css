@@ -1,5 +1,30 @@
-.container {
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+.item {
+  background-color: blue;
+}
+
+.item:nth-of-type(1) {
+  -ms-grid-row: 2;
+      grid-row-start: 2;
+  grid-row-end: 4;
+}
+
+.container1 {
   display: -ms-grid;
   display: grid;
+  width: 400px;
+  height: 400px;
+  -ms-grid-columns: 1fr 2fr 3fr 4fr;
+      grid-template-columns: 1fr 2fr 3fr 4fr;
+  -ms-grid-rows: 100px 100px 100px 100px;
+      grid-template-rows: 100px 100px 100px 100px;
+  grid-row-gap: 20px;
+  grid-column-gap: 20px;
 }
 /*# sourceMappingURL=grid.css.map */
