@@ -207,3 +207,17 @@ for (let [key, value] of iterEntries(myObj)) {
 事件监听
 发布/订阅
 Promise 对象 */
+
+
+function* sleep() {
+    (setTimeout( function* () {
+        yield(console.log("Ok"))
+    }, 1000))
+    yield(console.log("next ok"));
+    return 'end';
+}
+var s = sleep();
+s.next();
+s.next();
+console.log(s.next());
+console.log(s.next());
