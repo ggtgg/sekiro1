@@ -210,14 +210,20 @@ Promise 对象 */
 
 
 function* sleep() {
-    (setTimeout( function* () {
-        yield(console.log("Ok"))
-    }, 1000))
-    yield(console.log("next ok"));
-    return 'end';
+    function go(){
+        return new Promise(resolve=>{
+            setTimeout(()=>{
+                resolve(1)
+            },1000)
+        })
+    }
+    var result = yield go();
+    console.log(result);
 }
 var s = sleep();
-s.next();
-s.next();
-console.log(s.next());
-console.log(s.next());
+var sg=s.next();
+console.log(sg);
+sg.value.then(i=>{
+    console.log(i);
+})
+s.next('result');

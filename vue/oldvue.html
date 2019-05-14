@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<body>
+        <!-- 实现一个数据监听器Observer，能够对数据对象的所有属性进行监听，如有变动可拿到最新值并通知订阅者
+        实现一个指令解析器Compile，对每个元素节点的指令进行扫描和解析，根据指令模板替换数据，以及绑定相应的更新函数
+        实现一个Watcher，作为连接Observer和Compile的桥梁，能够订阅并收到每个属性变动的通知，执行指令绑定的相应回调函数，从而更新视图
+        mvvm入口函数，整合 -->
+
+    <div id="mvvm-app">
+        <input type="text" v-model="someStr">
+        <input type="text" v-model="child.someStr">
+        <p>{{ getHelloWord }}</p>
+        <p v-html="htmlStr"></p>
+        <button v-on:click="clickBtn">change model</button>
+    </div>
+    <script >
+        function Observer(data) {
+            this.data = data;
+            this.walk(data);
+        }
+
+        Observer.prototype = {
+            walk: function (data) {
+                var me = this;
+                Object.keys(data).forEach(function (key) {
+                    me.convert(key, data[key]);
+                });
+            },
+            convert: function (key, val) {
+                this.defineReactive(this.data, key, val);
+            },
+
+            defineReactive: function (data, key, val) {
+                var dep = new Dep();
+                var childObj = observe(val);
+
+                Object.defineProperty(data, key, {
+                    enumerable: true, 
+                    configurable: false, 
+                    get: function () {
+                        if (Dep.target) {
+                            dep.depend();
+                        }
+                        return val;
+                    },
+                    set: function (newVal) {
+                        if (newVal === val) {
+                            return;
+                        }
+                        val = newVal;
+                        childObj = observe(newVal);
+                        dep.notify();
+                    }
+                });
+            }
+        };
+
+        function observe(value, vm) {
+            if (!value || typeof value !== 'object') {
+                return;
+            }
+
+            return new Observer(value);
+        };
+
+
+        var uid = 0;
+
+        function Dep() {
+            this.id = uid++;
+            this.subs = [];
+        }
+
+        Dep.prototype = {
+            addSub: function (sub) {
+                this.subs.push(sub);
+            },
+
+            depend: function () {
+                Dep.target.addDep(this);
+            },
+
+            removeSub: function (sub) {
+                var index = this.subs.indexOf(sub);
+                if (index != -1) {
+                    this.subs.splice(index, 1);
+                }
+            },
+
+            notify: function () {
+                this.subs.forEach(function (sub) {
+                    sub.update();
+                });
+            }
+        };
+
+        Dep.target = null;
+    </script>
+
+    
+    <script>
+        function Watcher(vm, expOrFn, cb) {
+            this.cb = cb;
+            this.vm = vm;
+            this.expOrFn = expOrFn;
+            this.depIds = {};
+
+            if (typeof expOrFn === 'function') {
+                this.getter = expOrFn;
+            } else {
+                this.getter = this.parseGetter(expOrFn.trim());
+            }
+
+            this.value = this.get();
+        }
+
+        Watcher.prototype = {
+            update: function () {
+                this.run();
+            },
+            run: function () {
+                var value = this.get();
+                var oldVal = this.value;
+                if (value !== oldVal) {
+                    this.value = value;
+                    this.cb.call(this.vm, value, oldVal);
+                }
+            },
+            addDep: function (dep) {
+               
+                if (!this.depIds.hasOwnProperty(dep.id)) {
+                    dep.addSub(this);
+                    this.depIds[dep.id] = dep;
+                }
+            },
+            get: function () {
+                Dep.target = this;
+                var value = this.getter.call(this.vm, this.vm);
+                Dep.target = null;
+                return value;
+            },
+
+            parseGetter: function (exp) {
+                if (/[^\w.$]/.test(exp)) return;
+
+                var exps = exp.split('.');
+
+                return function (obj) {
+                    for (var i = 0, len = exps.length; i < len; i++) {
+                        if (!obj) return;
+                        obj = obj[exps[i]];
+                    }
+                    return obj;
+                }
+            }
+        };
+    </script>
+    <script >
+        function Compile(el, vm) {
+            this.$vm = vm;
+            this.$el = this.isElementNode(el) ? el : document.querySelector(el);
+
+            if (this.$el) {
+                this.$fragment = this.node2Fragment(this.$el);
+                this.init();
+                this.$el.appendChild(this.$fragment);
+            }
+        }
+
+        Compile.prototype = {
+            node2Fragment: function (el) {
+                var fragment = document.createDocumentFragment(),
+                    child;
+
+             
+                while (child = el.firstChild) {
+                    fragment.appendChild(child);
+                }
+
+                return fragment;
+            },
+
+            init: function () {
+                this.compileElement(this.$fragment);
+            },
+
+            compileElement: function (el) {
+                var childNodes = el.childNodes,
+                    me = this;
+
+                [].slice.call(childNodes).forEach(function (node) {
+                    var text = node.textContent;
+                    var reg = /\{\{(.*)\}\}/;
+
+                    if (me.isElementNode(node)) {
+                        me.compile(node);
+
+                    } else if (me.isTextNode(node) && reg.test(text)) {
+                        me.compileText(node, RegExp.$1.trim());
+                    }
+
+                    if (node.childNodes && node.childNodes.length) {
+                        me.compileElement(node);
+                    }
+                });
+            },
+
+            compile: function (node) {
+                var nodeAttrs = node.attributes,
+                    me = this;
+
+                [].slice.call(nodeAttrs).forEach(function (attr) {
+                    var attrName = attr.name;
+                    if (me.isDirective(attrName)) {
+                        var exp = attr.value;
+                        var dir = attrName.substring(2);
+                        // 事件指令
+                        if (me.isEventDirective(dir)) {
+                            compileUtil.eventHandler(node, me.$vm, exp, dir);
+                            // 普通指令
+                        } else {
+                            compileUtil[dir] && compileUtil[dir](node, me.$vm, exp);
+                        }
+
+                        node.removeAttribute(attrName);
+                    }
+                });
+            },
+
+            compileText: function (node, exp) {
+                compileUtil.text(node, this.$vm, exp);
+            },
+
+            isDirective: function (attr) {
+                return attr.indexOf('v-') == 0;
+            },
+
+            isEventDirective: function (dir) {
+                return dir.indexOf('on') === 0;
+            },
+
+            isElementNode: function (node) {
+                return node.nodeType == 1;
+            },
+
+            isTextNode: function (node) {
+                return node.nodeType == 3;
+            }
+        };
+
+        // 指令处理集合
+        var compileUtil = {
+            text: function (node, vm, exp) {
+                this.bind(node, vm, exp, 'text');
+            },
+
+            html: function (node, vm, exp) {
+                this.bind(node, vm, exp, 'html');
+            },
+
+            model: function (node, vm, exp) {
+                this.bind(node, vm, exp, 'model');
+
+                var me = this,
+                    val = this._getVMVal(vm, exp);
+                node.addEventListener('input', function (e) {
+                    var newValue = e.target.value;
+                    if (val === newValue) {
+                        return;
+                    }
+
+                    me._setVMVal(vm, exp, newValue);
+                    val = newValue;
+                });
+            },
+
+            class: function (node, vm, exp) {
+                this.bind(node, vm, exp, 'class');
+            },
+
+            bind: function (node, vm, exp, dir) {
+                var updaterFn = updater[dir + 'Updater'];
+
+                updaterFn && updaterFn(node, this._getVMVal(vm, exp));
+
+                new Watcher(vm, exp, function (value, oldValue) {
+                    updaterFn && updaterFn(node, value, oldValue);
+                });
+            },
+
+            // 事件处理
+            eventHandler: function (node, vm, exp, dir) {
+                var eventType = dir.split(':')[1],
+                    fn = vm.$options.methods && vm.$options.methods[exp];
+
+                if (eventType && fn) {
+                    node.addEventListener(eventType, fn.bind(vm), false);
+                }
+            },
+
+            _getVMVal: function (vm, exp) {
+                var val = vm;
+                exp = exp.split('.');
+                exp.forEach(function (k) {
+                    val = val[k];
+                });
+                return val;
+            },
+
+            _setVMVal: function (vm, exp, value) {
+                var val = vm;
+                exp = exp.split('.');
+                exp.forEach(function (k, i) {
+                    // 非最后一个key，更新val的值
+                    if (i < exp.length - 1) {
+                        val = val[k];
+                    } else {
+                        val[k] = value;
+                    }
+                });
+            }
+        };
+
+
+        var updater = {
+            textUpdater: function (node, value) {
+                node.textContent = typeof value == 'undefined' ? '' : value;
+            },
+
+            htmlUpdater: function (node, value) {
+                node.innerHTML = typeof value == 'undefined' ? '' : value;
+            },
+
+            classUpdater: function (node, value, oldValue) {
+                var className = node.className;
+                className = className.replace(oldValue, '').replace(/\s$/, '');
+
+                var space = className && String(value) ? ' ' : '';
+
+                node.className = className + space + value;
+            },
+
+            modelUpdater: function (node, value, oldValue) {
+                node.value = typeof value == 'undefined' ? '' : value;
+            }
+        };
+    </script>
+    <script ">
+        function MVVM(options) {
+            this.$options = options || {};
+            var data = this._data = this.$options.data;
+            var me = this;
+
+            // 数据代理
+            // 实现 vm.xxx -> vm._data.xxx
+            Object.keys(data).forEach(function (key) {
+                me._proxyData(key);
+            });
+
+            this._initComputed();
+
+            observe(data, this);
+
+            this.$compile = new Compile(options.el || document.body, this)
+        }
+
+        MVVM.prototype = {
+            $watch: function (key, cb, options) {
+                new Watcher(this, key, cb);
+            },
+
+            _proxyData: function (key, setter, getter) {
+                var me = this;
+                setter = setter ||
+                    Object.defineProperty(me, key, {
+                        configurable: false,
+                        enumerable: true,
+                        get: function proxyGetter() {
+                            return me._data[key];
+                        },
+                        set: function proxySetter(newVal) {
+                            me._data[key] = newVal;
+                        }
+                    });
+            },
+
+            _initComputed: function () {
+                var me = this;
+                var computed = this.$options.computed;
+                if (typeof computed === 'object') {
+                    Object.keys(computed).forEach(function (key) {
+                        Object.defineProperty(me, key, {
+                            get: typeof computed[key] === 'function' ?
+                                computed[key] :
+                                computed[key].get,
+                            set: function () {}
+                        });
+                    });
+                }
+            }
+        };
+    </script>
+    <script>
+        var vm = new MVVM({
+            el: '#mvvm-app',
+            data: {
+                someStr: 'hello ',
+                className: 'btn',
+                htmlStr: '<span style="color: #f00;">red</span>',
+                child: {
+                    someStr: 'World !'
+                }
+            },
+            computed: {
+                getHelloWord: function () {
+                    return this.someStr + this.child.someStr;
+                }
+            },
+            methods: {
+                clickBtn: function (e) {
+                    var randomStrArr = ['childOne', 'childTwo', 'childThree'];
+                    this.child.someStr = randomStrArr[parseInt(Math.random() * 3)];
+                }
+            }
+        });
+        vm.$watch('child.someStr', function () {
+            console.log(arguments);
+        });
+    </script>
+
+</body>
+
+</html
