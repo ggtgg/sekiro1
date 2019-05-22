@@ -10,40 +10,126 @@
 
 <body>
     <div id="app">
-        <input type="text" v-model="someStr">
-        <p>a</p>
-        <p>b</p>
+        <input type="text" v-model="a">
+        <p v-bind="a"></p>
+        <p v-bind="b"></p>
         <button @click="add">add</button>
     </div>
-
 </body>
 <script>
     class Vue {
         constructor(options) {
             this.el = document.querySelector(options.el);
             this.data = options.data;
-            Object.keys(data).forEach((key) => {
-                this.proxyData(key);
-            })
+            // Object.keys(this.data).forEach((key) => {
+            //     this.proxyData(key);
+            // })
             this.methods = options.methods;
             this.watcherTask = {};
-            this.observer(data);
-            this.compile(this.$el);
+            this.observer(this.data);
+            this.compile(this.el);
         }
-        proxyData(key) {
+        // proxyData(key) {
+        //     let that = this;
+        //     //这个会自己执行一遍definProperty
+        //     Object.defineProperty(that, key, {
+        //         configurable: false,
+        //         enumerable: true,
+        //         get() {
+        //             return that.data[key]
+        //         },
+        //         set(newVal) {
+        //             that.data[key] = newVal;
+        //         }
+        //     })
+        // }
+        observer(data) {
             let that = this;
-            Object.defineProperty(that, key, {
-                configurable: false,
-                enumerable: true,
-                get() {
-                    return that.data[key]
-                },
-                set(newVal) {
-                    that.data[key] = newVal;
-                }
+            Object.keys(data).forEach(key => {
+                let value = data[key];
+                this.watcherTask[key] = [];
+                Object.defineProperty(data, key, {
+                    configurable: false,
+                    enumrable: true,
+                    get() {
+                        return value
+                    },
+                    set(newValue) {
+                        if (newValue !== value) {
+                            value = newValue;
+                            that.watcherTask[key].forEach(
+                                task => {
+                                    task.update();
+                                }
+                            )
+                        }
+                    }
+                })
             })
+        }
+        compile(el) {
+                var nodes = el.childNodes;
+                console.log(this);
+                console.log(this.data);
+            for (let i = 0; i < nodes.length; i++) {
+                const node = nodes[i];
+                if (node.nodeType === 1) {
+                    if (node.childNodes.length > 0) {
+                        this.compile(node)
+                    }
+                    if (node.hasAttribute('v-model') && (node.tagName === 'INPUT' || node.tagName === 'TEXTAREA')) {
+                        node.addEventListener('input', (() => {
+                            let attrVal = node.getAttribute('v-model')
+                            this.watcherTask[attrVal].push(new Watcher(node, this, attrVal, 'value'))
+                            return () => {
+                                this.data[attrVal] = node.value
+                            }
+                        })())
+                    }
+                    if (node.hasAttribute('v-bind')) {
+                        let attrVal = node.getAttribute('v-bind');
+                        this.watcherTask[attrVal].push(new Watcher(node, this, attrVal, 'innerText'))
+                    }
+                    if (node.hasAttribute('@click')) {
+                        let attrVal = node.getAttribute('@click')
+                        node.addEventListener('click', e => {
+                            this.methods[attrVal] && this.methods[attrVal].bind(this)()
+                        })
+                    }
+                }
+            }
+        }
+    }
+    class Watcher {
+        // new Watcher(node, this, attrVal, 'innerHTML')
+        constructor(el, vm, value, type) {
+            this.el = el;
+            this.vm = vm;
+            this.value = value;
+            this.type = type;
+            this.update()
+
+        }
+        update() {
+            this.el[this.type] = this.vm.data[this.value]
         }
     }
 </script>
+<script>
+    var vm = new Vue({
+        el: "#app",
+        data: {
+            a: 1,
+            b: 0,
+        },
+        methods: {
+            add() {
+                console.log(this.data);
+                this.data.b += 1;
+            }
+        }
+    })
+</script>
+
 
 </html>
