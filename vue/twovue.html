@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+
+<body>
+    <div id="app">
+        <input type="text" v-model="someStr">
+        <p>a</p>
+        <p>b</p>
+        <button @click="add">add</button>
+    </div>
+
+</body>
+<script>
+    class Vue {
+        constructor(options) {
+            this.el = document.querySelector(options.el);
+            this.data = options.data;
+            Object.keys(data).forEach((key) => {
+                this.proxyData(key);
+            })
+            this.methods = options.methods;
+            this.watcherTask = {};
+            this.observer(data);
+            this.compile(this.$el);
+        }
+        proxyData(key) {
+            let that = this;
+            Object.defineProperty(that, key, {
+                configurable: false,
+                enumerable: true,
+                get() {
+                    return that.data[key]
+                },
+                set(newVal) {
+                    that.data[key] = newVal;
+                }
+            })
+        }
+    }
+</script>
+
+</html>
